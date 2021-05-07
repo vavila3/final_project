@@ -1,0 +1,952 @@
+---
+title: "Assignment 2"
+author: "Vanessa Avila"
+date: "4/27/2021"
+output: 
+  html_document:
+    code_folding: show
+    theme: united
+    df_print: paged
+    highlight: textmate
+    toc: true
+    toc_float: true
+editor_options:
+  chunk_output_type: inline
+always_allow_html: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message=FALSE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+## Loading Packages
+
+```{r}
+library(RMySQL)
+library(keyring)
+library(odbc)
+library(tidyverse)
+```
+## Connecting R to MySQL
+
+```{r}
+service_mysql <- "r-mysql"
+username_mysql <- "root"
+```
+
+```{r eval=FALSE}
+# THIS CODE CHUNK IS ONLY RAN ONCE INTERACTIVE; see week-3-introducing-r-with-sql file for more information
+# We set this chunk to eval=FALSE so when we knit
+# So R ignores this chunk (we only have to make a key once)
+# Create a keyring to access MySQL if you have not yet
+keyring::key_set(service = service_mysql, username = username_mysql)
+```
+
+```{r}
+con_sakila <- dbConnect(
+  MySQL(),
+  # macOS may encounter an error: refer to https://github.com/r-lib/keyring/issues/45
+  user = key_list(service = service_mysql)$username,
+  password = key_get(
+    # We are using service_mysql defined above
+    service = service_mysql,
+    # Also passing username from key_list()
+    username = key_list(service = service_mysql)$username
+  ),
+  # rstudioapi is another option if keyring is not working for you
+  # You will have to specify the user manually also
+  # user = ""
+  # password = rstudioapi::askForPassword("Database password")
+  dbname = "sakila",
+  host = "localhost"
+)
+```
+
+# QUESTION 1
+
+### a) Show the list of databases.
+
+```{sql connection=con_sakila}
+SHOW DATABASES;
+```
+
+### b) Select sakila database.
+
+```{sql connection=con_sakila}
+USE sakila;
+```
+
+### c) Show all tables in the sakila database.
+
+```{sql connection=con_sakila}
+SHOW TABLES;
+```
+
+### d) Show each of the columns along with their data types for the actor table.
+
+```{sql connection=con_sakila}
+DESCRIBE actor;
+```
+
+### e) Show the total number of records in the actor table. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT COUNT(*)
+FROM actor;
+```
+####DPLYR BONUS
+
+```{r eval=FALSE, warning=FALSE}
+nrow(actor)
+```
+
+
+### f) What is the first name and last name of all the actors in the actor table? (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  first_name, 
+  last_name 
+FROM 
+  actor;
+```
+
+####DPLYR BONUS
+
+```{r}
+actor <- tbl(con_sakila,"actor") 
+```
+
+```{r}
+actor <- actor %>% 
+  collect()
+```
+
+```{r}
+select (actor, first_name, last_name)
+```
+
+### g) Insert your first name and middle initial (in the last name column) into the actors table.
+
+```{sql connection=con_sakila}
+INSERT INTO actor
+(first_name, last_name)
+VALUES
+  ('VANESSA', 'A');
+```
+
+### h) Update your middle initial with your last name in the actors table.
+
+```{sql connection=con_sakila}
+UPDATE actor
+SET 
+    last_name = 'AVILA'
+WHERE
+    last_name = 'A';
+```
+
+
+### i) Delete the record from the actor table where the first name matches your first name.
+
+```{sql connection=con_sakila}
+DELETE FROM actor WHERE first_name= 'VANESSA';
+```
+
+### j) Create a table payment_type with the following specifications and appropriate data types
+
+Table Name : 'payment_type'
+Primary Key: 'payment_type_id'
+Column: 'Type'
+Insert following rows in to the table: 1, 'Credit Card'; 2, 'Cash'; 3, 'Paypal'; 4 , 'Cheque'
+
+```{sql connection=con_sakila}
+CREATE TABLE if not exists sakila.payment_type (
+  payment_type_id INT NOT NULL,
+  Type VARCHAR(50) NOT NULL,
+  PRIMARY KEY (payment_type_id)
+);
+```
+ 
+```{sql connection=con_sakila}
+
+INSERT INTO payment_type
+(payment_type_id, Type)
+VALUES
+  (1, 'Credit Card'),
+  (2, 'Cash'),
+  (3, 'PayPal'),
+  (4, 'Cheque');
+```
+
+
+### k) Rename table payment_type to payment_types.
+
+```{sql connection=con_sakila}
+RENAME TABLE payment_type TO payment_types;  
+```
+
+### l) Drop the table payment_types.
+
+```{sql connection=con_sakila}
+DROP TABLE IF EXISTS `payment_types`;
+```
+
+# QUESTION 2
+
+### a) List all the movies (title & description) that are rated PG-13. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  title, description
+FROM
+  film
+WHERE
+  rating = 'PG-13';
+```
+####DPLYR BONUS
+
+```{r}
+film <- tbl(con_sakila,"film") 
+```
+
+```{r}
+film <- film %>% 
+  collect()
+```
+
+```{r}
+film %>% 
+  select(title, description, rating) %>% 
+  filter(rating == "PG-13")
+```
+
+
+### b) List all movies that are either PG OR PG-13 using `IN` operator. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+    title, rating, description
+FROM
+    film
+WHERE
+    rating IN ('PG' , 'PG-13');
+```
+####DPLYR BONUS
+```{r}
+film %>% 
+  select(title, description, rating) %>% 
+  filter(rating == "PG" | rating == "PG-13")
+```
+
+
+### c) Report all payments greater than and equal to $2 and Less than equal to $7. (dplyr bonus)
+
+Note : write 2 separate queries conditional operator and `BETWEEN` keyword
+
+This is the first query with the conditional operator.
+
+```{sql connection=con_sakila}
+SELECT 
+    amount AS payment_amount
+FROM
+    payment
+WHERE
+    amount >= 2.00 
+    AND amount <= 7.00;
+```
+
+This is the second query with the BETWEEN operator.
+
+```{sql connection=con_sakila}
+SELECT 
+    amount AS payment_amount
+FROM
+    payment
+WHERE
+    amount BETWEEN 2.00 AND 7.00;
+```
+
+### d) List all addresses that have phone number that contain digits 589, start with 140 or end with 589. (dplyr bonus)
+
+Note : write 3 different queries
+
+The first query features the addresses that have a phone number that contains digits 589.
+
+```{sql connection=con_sakila}
+SELECT 
+  address, address2, phone
+FROM
+  address
+WHERE
+  phone LIKE '%589%';
+```
+This is the second query with the addresses associated with a phone number that begin with 140.
+```{sql connection=con_sakila}
+SELECT 
+  address, address2, phone
+FROM
+  address
+WHERE
+  phone LIKE '140%';
+```
+This is the third query with the addresses that have a phone number that ends in 589.
+```{sql connection=con_sakila}
+SELECT 
+  address, address2, phone
+FROM
+  address
+WHERE
+  phone LIKE '%589';
+```
+
+####DPLYR BONUS
+
+```{r}
+address <- tbl(con_sakila,"address") 
+```
+
+```{r}
+address <- address %>% 
+  collect()
+```
+
+```{r}
+address %>% 
+  select(address, address2, phone) %>% 
+  filter(str_detect(phone,"589"))
+```
+```{r}
+address %>% 
+  select(address, address2, phone) %>% 
+  filter(str_detect(phone,"^140"))
+```
+```{r}
+address %>% 
+  select(address, address2, phone) %>% 
+  filter(str_detect(phone,"589$"))
+```
+
+### e) List all staff members (first name, last name, email) who have no password. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  first_name, last_name, email
+FROM 
+  staff
+WHERE
+  password IS NULL;
+```
+####DPLYR BONUS
+```{r}
+staff <- tbl(con_sakila,"staff") 
+```
+
+```{r}
+staff <- staff %>% 
+  collect()
+```
+
+```{r}
+staff %>% 
+  select(first_name, last_name, email, password) %>% 
+  filter(is.na(password))
+```
+
+### f) Select all films that have title names like ZOO and rental duration greater than or equal to 4. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  title
+FROM 
+  film
+WHERE
+  title LIKE '%ZOO%' AND rental_duration >= 4;
+```
+
+
+####DPLYR BONUS
+```{r}
+film %>% 
+  select(title, rental_duration) %>% 
+  filter(str_detect(title,"ZOO")) %>% 
+  filter(rental_duration >= 4)
+```
+
+### g) What is the cost of renting the movie ACADEMY DINOSAUR for 2 weeks?
+
+Note : use of column alias
+
+
+```{sql connection=con_sakila}
+SELECT 
+  title, (rental_rate * 14) AS two_week_rental_rate
+FROM
+  film
+WHERE
+  title = 'ACADEMY DINOSAUR';
+```
+
+### h) List all unique districts where the customers, staff, and stores are located. (dplyr bonus)
+
+Note : check for `NOT NULL` values
+
+```{sql connection=con_sakila}
+SELECT 
+  distinct district 
+FROM 
+  address
+WHERE
+  district IS NOT NULL;
+```
+####DPLYR BONUS
+
+```{r}
+  unique(address$district)
+```
+
+### i) List the top 10 newest customers across all stores. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  first_name, last_name, create_date
+FROM 
+  customer
+ORDER BY
+  create_date DESC
+LIMIT 
+  10;
+```
+
+# QUESTION 3
+
+### a) Show total number of movies. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT COUNT(DISTINCT film_id)
+FROM film;
+```
+
+####DPLYR BONUS
+
+```{r}
+nrow(film)
+```
+
+
+### b) What is the minimum payment received and max payment received across all transactions? (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT MIN(amount) AS min_amount, MAX(amount) AS max_amount
+FROM payment;
+```
+
+####DPLYR BONUS
+
+```{r eval=FALSE} 
+  min(payment$amount)
+  max(payment$amount)
+```
+
+
+### c) Number of customers that rented movies between Feb-2005 and May-2005 (based on payment date). (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  COUNT(customer_id) AS Number_of_customers
+FROM 
+  payment
+WHERE 
+  payment_date 
+BETWEEN 
+  CAST('2005-02-28' AS DATE) AND CAST('2005-05-31' AS DATE);
+```
+
+### d) List all movies where replacement_cost is greater than $15 or rental_duration is between 6 and 10 days. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  replacement_cost, rental_duration
+FROM 
+  film
+WHERE 
+  replacement_cost > 15 OR rental_duration BETWEEN '6' AND '10';
+```
+
+### e) What is the total amount spent by customers for movies in the year 2005? (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  SUM(amount) AS total_amount_spent
+FROM
+  payment 
+WHERE
+  payment_date BETWEEN CAST('2005-01-01' AS DATE) AND CAST('2005-12-31' AS DATE);
+```
+
+### f) What is the average replacement cost across all movies? (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  AVG(replacement_cost)
+FROM 
+  film;
+```
+
+####DPLYR BONUS
+
+```{r}
+mean(film$ replacement_cost) 
+```
+
+### g) What is the standard deviation of rental rate across all movies? (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  STD(rental_rate)
+FROM 
+  film
+```
+
+####DPLYR BONUS
+
+```{r}
+sd(film$ rental_rate) 
+```
+
+### h) What is the midrange of the rental duration for all movies. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT
+  (MAX(rental_duration) + MIN(rental_duration)) / 2 AS midRange
+FROM
+  film 
+```
+
+####DPLYR BONUS
+
+```{r}
+min(film$rental_duration) + max(film$rental_duration) / 2
+```
+
+
+# QUESTION 4
+
+### a) List all customers that live in the Nepal. (dplyr bonus)
+
+```{sql connection=con_sakila}
+
+SELECT
+  cu.first_name,
+  cu.last_name,
+  co.country
+FROM
+  country co 
+  LEFT JOIN
+  city c ON co.country_id = c.country_id
+  LEFT JOIN
+  address a ON a.city_id = c.city_id
+  LEFT JOIN
+  customer cu ON cu.address_id = a.address_id
+WHERE
+  co.country = 'Nepal';
+```
+
+### b) List all actors that appear in the movie titled Academy Dinosaur. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT
+  a.first_name,
+  a.last_name,
+  f.title
+FROM
+  actor a
+    INNER JOIN
+  film_actor fa ON a.actor_id = fa.actor_id
+    INNER JOIN
+  film f ON fa.film_id = f.film_id
+WHERE
+  f.title = 'Academy Dinosaur';
+```
+
+
+### c) What is the revenue generated by each customer? (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  customer_id AS customer, 
+  SUM(amount) AS revenue
+FROM
+  payment
+GROUP BY 
+  customer_id
+```
+
+### d) List top 10 customers that rented the most movies.
+
+```{sql connection=con_sakila}
+
+SELECT 
+  customer_id, 
+  COUNT(rental_id) AS movies_rented
+FROM
+  rental
+GROUP BY 
+  customer_id
+ORDER BY
+	movies_rented DESC
+LIMIT 10;
+```
+
+### e) List the inventory available in store to rent for each of the movies. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT store_id, count(inventory_id) AS total_inventory
+FROM inventory
+GROUP BY store_id;
+```
+
+```{sql connection=con_sakila}
+SELECT 
+  distinct f.title AS movie_title,
+  count(i.inventory_id)
+FROM 
+  film f
+  LEFT JOIN
+  inventory i ON f.film_id = i.film_id
+WHERE
+  i.store_id IS NOT NULL
+GROUP BY
+  f.title;
+```
+
+
+### f) List the top s that have the highest rental activity. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  a.postal_code AS zipcode,
+  count(r.rental_id) AS rentals
+FROM 
+  address a
+  LEFT JOIN
+  customer cu ON a.address_id = cu.address_id
+  LEFT JOIN
+  rental r ON cu.customer_id = r.customer_id
+WHERE
+  a.postal_code IS NOT NULL
+GROUP BY
+  a.postal_code
+ORDER BY
+  count(r.rental_id) DESC;
+```
+
+# QUESTION 5
+
+Note: For questions a, b, c below use a single query with a sub query
+
+### a) List actors and customers whose first name is the same as the first name of the actor with ID 8. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  act.first_name AS ACTOR_FNAME,
+  act.last_name AS ACTOR_SURNAME,
+  cu.first_name AS CUST_FNAME,
+  cu.last_name AS CUST_SURNAME
+FROM 
+  actor act
+    INNER JOIN 
+  customer cu
+WHERE
+  EXISTS (SELECT actor_id
+  FROM actor
+  WHERE
+    act.first_name = 'MATTHEW' AND cu.first_name = 'MATTHEW');
+```
+
+
+### b) List customers and payment amounts, with payments greater than average payment amount. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  cu.first_name AS customer_firstname,
+  cu.last_name AS customer_surname,
+  p.amount AS payment_amounts
+FROM 
+  customer cu
+  LEFT JOIN
+  payment p ON cu.customer_id = p.customer_id
+WHERE
+  amount >(SELECT AVG(amount) 
+              FROM payment);
+```
+
+### c) List customers who have rented movies at least once. (dplyr bonus)
+Note: use `IN` clause with the sub query
+
+```{sql connection=con_sakila}
+SELECT 
+  cu.first_name AS customer_firstname,
+  cu.last_name AS customer_surname
+FROM 
+  customer cu
+WHERE
+  customer_id IN (SELECT customer_id 
+                    FROM rental);
+```
+
+### d) Find the floor of the maximum, minimum and average payment amount
+
+```{sql connection=con_sakila}
+SELECT
+  FLOOR(MAX(amount)) AS max_amount_floor,
+  FLOOR(MIN(amount)) AS min_amount_floor,
+  FLOOR(AVG(amount)) AS avg_amount_floor
+FROM
+  payment
+```
+# QUESTION 6
+
+### a) Create a view called actors_portfolio which contains information about actors and films (including titles and category).
+
+```{sql connection=con_sakila, eval=FALSE}
+CREATE VIEW actors_portfolio AS
+  SELECT
+    act.first_name AS actor_firstname,
+    act.last_name AS actor_lastname,
+    act.actor_id,
+    f.title AS movie_title,
+    f.description AS movie_description,
+    ca.name AS movie_category
+  FROM
+    actor act
+    LEFT JOIN
+    film_actor filmact ON act.actor_id = filmact.actor_id
+    LEFT JOIN
+    film f ON filmact.film_id = f.film_id
+    LEFT JOIN
+    film_category filmca ON filmca.film_id = f.film_id
+    LEFT JOIN
+    category ca ON ca.category_id = filmca.category_id;
+```
+
+### b) Describe the structure of the view and query the view to get information on the actor ADAM GRANT
+
+```{sql connection=con_sakila}
+
+DESCRIBE 
+  actors_portfolio
+```
+
+```{sql connection=con_sakila}
+SELECT 
+  actor_id,
+  actor_firstname,
+  actor_lastname,
+  movie_title AS movies_actor_starred_in,
+  movie_category 
+FROM
+  actors_portfolio
+WHERE 
+  actor_firstname = 'ADAM' AND actor_lastname = 'GRANT';
+```
+
+### c) Insert a new movie titled Data Hero in Sci-Fi Category starring ADAM GRANT
+Note: If you see an error, explain why this is not permitted
+
+Not all views are able to be updated, per our class module (4.3 Views and Indexes). Through this query request, I would be introducing a new row, which would not be consistent with the information in the table where the view is sourcing it's information from. For a view to be updateable it would require a one-to-one relationship between the rows in the view and the rows in the underlying table.
+
+```{sql connection=con_sakila, eval=FALSE}
+INSERT INTO 
+  actors_portfolio (actor_firstname, actor_lastname, actor_id, movie_title, movie_description, movie_category)
+  values ('ADAM','GRANT','71','Data Hero','Movie about a data hero','Sci_fi')
+```
+
+# QUESTION 7 (Optional Practice Questions)
+
+### a) Customers sorted by first name and last name in ascending order. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  first_name, 
+  last_name
+FROM
+  customer
+ORDER BY
+  first_name, 
+  last_name ASC
+```
+
+### b) Group distinct addresses by district. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  district,
+  COUNT(distinct address) AS distinct_addresses
+FROM
+  address
+GROUP BY
+  district
+ORDER BY
+  district ASC;
+```
+
+
+### c) Count of movies that are either G/NC-17/PG-13/PG/R grouped by rating. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT
+  rating,
+  count(film_id) AS count_of_movies
+FROM
+  film
+GROUP BY
+  rating;
+```
+### d) Number of addresses in each district. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  district,
+  COUNT(address) AS addresses
+FROM
+  address
+GROUP BY
+  district
+ORDER BY
+  district ASC;
+```
+
+### e) Find the movies where rental rate is greater than $1 and order result set by descending order. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+    title AS movie,
+    rental_rate
+FROM
+    film
+WHERE
+    rental_rate > 1.00
+ORDER BY
+    rental_rate DESC;
+```
+
+### f) Top 2 movies that are rated R with the highest replacement cost. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  title AS movie, 
+  rating,
+  replacement_cost
+FROM 
+  film
+ORDER BY
+  replacement_cost DESC
+LIMIT 
+  2;
+```
+
+### g) Find the most frequently occurring (mode) rental rate across products. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  rental_rate AS rental_rate_mode
+FROM 
+  film
+GROUP BY
+  rental_rate
+ORDER BY
+  COUNT(*) DESC;
+```
+
+
+### h) Find the top 2 movies with movie length greater than 50mins and which has commentaries as a special features. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  title AS movie, 
+  length,
+  special_features 
+FROM 
+  film
+WHERE
+  length > 50 AND special_features = 'commentaries'
+ORDER BY
+  length DESC
+LIMIT 
+  2;
+```
+
+### i) List the years with more than 2 movies released. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+    release_year
+FROM
+    film
+WHERE
+     film_id > 2
+GROUP BY
+    release_year
+```
+
+# QUESTION 8 (Optional Practice Questions)
+
+### a) Extract the street number (characters 1 through 4) from customer addressLine1. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  cu.customer_id,
+  cu.first_name,
+  cu.last_name,
+  SUBSTRING(address, 1, 4) AS customer_street_number
+FROM
+  address a
+    INNER JOIN
+  customer cu ON a.address_id = cu.address_id
+GROUP BY
+  customer_id;
+```
+
+### b) Find out actors whose last name starts with character A, B or C. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT
+  last_name
+FROM
+  actor
+WHERE
+  last_name LIKE 'A%' OR last_name LIKE 'B%' OR last_name LIKE 'C%';
+```
+
+### c) Find film titles that contains exactly 10 characters. (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  title
+FROM
+  film
+WHERE
+  length(title)=10 
+```
+
+### d) Format a payment_date using the following format e.g "22/1/2016". (dplyr bonus)
+
+```{sql connection=con_sakila}
+SELECT 
+  DATE_FORMAT (payment_date, "%d/%m/%Y")
+FROM
+  payment
+```
+
+### e) Find the number of days between two date values rental_date & return_date. (dplyr bonus)
+
+```{sql connection=con_sakila} 
+SELECT 
+  DATEDIFF(return_date, rental_date) AS days,
+  rental_date,
+  return_date
+FROM rental
+```
+

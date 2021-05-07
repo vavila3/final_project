@@ -1,0 +1,1 @@
+"0","count(distinct_df_accused, ALLEGATION_CATEGORY) %>% arrange(desc(n))"

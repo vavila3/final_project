@@ -1,0 +1,261 @@
+---
+title: "Data Insights on Chicago Police Accountability"
+author: "Vanessa Avila, Ember Urbach, Samuel Carlson"
+date: "5/6/2021"
+output:
+  html_document:
+    code_folding: show
+    theme: united
+    df_print: paged
+    highlight: textmate
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+editor_options:
+  chunk_output_type: inline
+always_allow_html: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+![](Title.png)
+
+## I. Research Objectives
+
+The current landscape of police brutality in the city of Chicago has community leaders, policy makers, and the public asking what can be done to prevent more deaths. Data plays a central role in helping to shed light around the excessive use-of-force and racially-motivated patterns of violence.
+
+Our foundational research objective is to analyze data regarding police misconduct and accountability in Chicago. We endeavor to understand the nature, extent, and correlations between city demographics and police misconduct. Using the datasets provided by the Invisible Institute, we hope to provide insights on how these complaints impact Chicagoans geographically and demographically. 
+
+## II. Methodology
+
+The data for our project was obtained from the Civilian Office of Police Accountability (COPA) via a Freedom of Information Act (FOIA) request made by the Invisible Institute. The data obtained contained a total of 7 datasets.
+
+### Data Preparation 
+
+#### Loaded Required Libraries
+The first step was to load both the data and the required libraries into R.
+
+```{r eval=FALSE}
+install.packages("dplyr")
+```
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(skimr)
+library(RMySQL)
+library(keyring)
+library(odbc)
+library(readxl)
+library(RSQLite)
+library(dbplyr)
+library(dplyr)
+library(ggplot2)
+library(esquisse)
+library(modeldata)
+```
+
+#### Loaded Required Libraries
+```{r}
+df_accused <- read_excel("accused.xlsx") 
+```
+
+```{r}
+df_case_info <- read_excel("case_info.xlsx") 
+```
+
+```{r}
+df_civilian_witness <- read_excel("civilian_witness.xlsx") 
+```
+
+```{r}
+df_complainant <- read_excel("complainant.xlsx") 
+```
+
+```{r}
+df_cpd_witness <- read_excel("cpd_witness.xlsx") 
+```
+
+```{r}
+df_investigators <- read_excel("investigators.xlsx") 
+```
+
+```{r}
+df_victim <- read_excel("victim.xlsx") 
+```
+
+##### Removed duplicates
+
+The distinct_df_accused provides a dataframe for the primary key (LOG_NO) without duplicates. 
+
+```{r}
+distinct_df_accused <- distinct(df_accused)
+```
+
+
+```{r}
+count(distinct_df_accused, LOG_NO) %>% arrange(desc(n))
+```
+
+##### Trimmed White Spaces
+
+```{r eval=FALSE}
+distinct_df_accused %>% 
+  janitor::clean_names()
+```
+##### Identified Columns with 50%+ missing values
+
+```{r}
+columns_missing_most_data <- distinct_df_accused %>%
+  summarise(across(everything(), ~ skimr::n_missing(.x))) %>%
+  pivot_longer(cols = everything(),
+               names_to = "variable",
+               values_to = "missing_count") %>% 
+  mutate(proportion_missing = round(missing_count / nrow(df_accused), 2)) %>% 
+  arrange(desc(missing_count)) %>% 
+  # Detect columns that were missing more than 50% of the data
+  filter(proportion_missing > .5) %>% 
+  pull(variable)
+
+print(message("Columns missing 50%+ data:"))
+columns_missing_most_data
+```
+
+### Normalization
+
+#### First Normal Form
+
+The CPD datasets were in First Normal Form, with all entries being single-valued and atomic. 
+
+#### Second Normal Form
+
+Our first step was to identify the primary keys in the dataset. The LOG_NO was the central key that tied all the datasets together. 
+
+The distinct function showed that there were 84,638 distinct LOG_NO entities in the dataset.
+
+```{r}
+distinct(df_accused, LOG_NO)
+```
+
+A secondary primary key surfaced in the data, in the "PENALTY_ID" column. There are a total of 114,344 distinct PENALTY_IDs.
+
+```{r}
+count(distinct_df_accused, PENALTY_ID) %>% arrange(desc(n))
+```
+
+The third primary key in the data was STAR_NO, which had a total of distince 14,395 entries.
+```{r}
+count(distinct_df_accused, STAR_NO) %>% arrange(desc(n))
+```
+
+#### Third Normal Form
+
+For 3NF we then grouped the data to ensure the columns were non-transitively dependent on the primary key. This included identifying: race code, sex code, penalty code, allegation code, investigation code, finding code, and location code.
+
+Race Code
+```{r}
+count(distinct_df_accused, RACE_CODE_CD) %>% arrange(desc(n))
+```
+
+Sex Code
+```{r}
+count(distinct_df_accused, SEX_CODE_CD) %>% arrange(desc(n))
+```
+
+Penalty Code
+```{r}
+count(distinct_df_accused, PENALTY_CODE) %>% arrange(desc(n))
+```
+
+Allegation Code
+```{r}
+count(distinct_df_accused, ALLEGATION_CATEGORY, ALLEGATION_CATEGORY_CD) %>% arrange(desc(n))
+```
+
+### EER Model
+
+We analyzed a total of 7 datasets to build the EER Model in SQL. The tables were partitioned by aggrieved party, accused/CPD, allegation, and outcome.
+
+![](ER_Model_updated.png)
+
+## III. Data Analysis
+
+### Allegation Data
+
+```{r}
+count(distinct_df_accused, ALLEGATION_CATEGORY) %>% arrange(desc(n))
+```
+
+### Penalty Data
+
+```{r}
+select (distinct_df_accused, PENALTY_CODE)
+```
+
+There are a total of 225,523 cases within the accused dataset. When I filtered the data, I found that Chicago Police officers were penalized in 49,221 of those cases, which is only 21% of the time.
+
+```{r}
+distinct_df_accused %>% 
+  filter(! is.na(PENALTY_CODE))
+```
+
+```{r}
+49221/225523 * 100
+```
+
+176K of CPD did not have penalties listed. From the categories that were listed, 32,247 penalties were suspensions, 8,707 resulted in reprimands, 4,132 were categorized as 'violation noted', 4,131 faced 'separation'.
+
+```{r}
+count(distinct_df_accused, PENALTY_CODE) %>% arrange(desc(n))
+```
+
+```{r}
+distinct_df_accused %>%
+ filter(!(PENALTY_CODE %in% "WORK REGULAR DAY OFF") | is.na(PENALTY_CODE)) %>%
+ ggplot() +
+  aes(x = PENALTY_CODE, fill = PENALTY_CODE) +
+  geom_bar() +
+  scale_fill_hue(direction = -1) +
+  labs(
+    x = "Penalty Type",
+    y = "Total Penalties",
+    title = "Penalty Report"
+  ) +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+### Findings Data
+
+```{r}
+count(distinct_df_accused, ACCUSED_ARRESTED) %>% arrange(desc(n))
+```
+
+```{r}
+count(distinct_df_accused, FINDING_CODE) %>% arrange(desc(n))
+```
+
+
+```{r}
+distinct_df_accused <- distinct_df_accused %>% 
+  mutate(FINDING_CODE = ifelse(
+    FINDING_CODE == "ADDITIONAL INVESTIGATION REQUESTED", "ADDITIONALINFOREQ", FINDING_CODE))
+```
+
+
+```{r}
+ggplot(distinct_df_accused) +
+  aes(x = FINDING_CODE, fill = FINDING_CODE) +
+  geom_bar() +
+  scale_fill_hue(direction = 1) +
+  labs(x = "Case Finding", y = "Total Number", title = "Finding Report") +
+  coord_flip() +
+  theme_minimal()
+```
+
+
+

@@ -1,0 +1,3 @@
+"0","distinct_df_accused <- distinct_df_accused %>% "
+"0","  mutate(FINDING_CODE = ifelse("
+"0","    FINDING_CODE == ""ADDITIONAL INVESTIGATION REQUESTED"", ""ADDITIONALINFOREQ"", FINDING_CODE))"
