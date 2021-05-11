@@ -1,2 +1,0 @@
-library(usethis)
-use_git_config(user.name = "Vanessa Avila", user.email = "vavila3@gmail.com")

@@ -1,0 +1,35 @@
+---
+title: "U"
+author: "Vanessa Avila"
+date: "5/9/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+distinct_df_accused %>%
+ ggplot() +
+  aes(x = FINDING_CODE, fill = FINDING_CODE) +
+  geom_bar() +
+  scale_fill_manual(
+    values = list(
+      ADDITIONALINFOREQ = "darkblue",
+      EXONERATED = "darkblue",
+      NO AFFIDAVIT = "darkblue",
+      NOT SUSTAINED = "darkblue",
+      SUSTAINED = "darkred",
+      UNFOUNDED = "darkblue"
+    )
+  ) +
+  labs(
+    x = "Case Finding",
+    y = "Total",
+    title = "Case Findings of All Allegations"
+  ) +
+  theme_gray()
+```
+

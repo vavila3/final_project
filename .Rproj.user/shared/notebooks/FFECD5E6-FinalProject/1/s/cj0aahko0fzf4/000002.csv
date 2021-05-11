@@ -1,2 +1,0 @@
-"0","distinct_df_accused %>% "
-"0","  filter(! is.na(PENALTY_CODE))"

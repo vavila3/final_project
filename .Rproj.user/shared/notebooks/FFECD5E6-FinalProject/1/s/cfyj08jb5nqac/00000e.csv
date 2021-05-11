@@ -1,7 +1,0 @@
-"0","ggplot(distinct_df_accused) +"
-"0","  aes(x = FINDING_CODE, fill = FINDING_CODE) +"
-"0","  geom_bar() +"
-"0","  scale_fill_hue(direction = 1) +"
-"0","  labs(x = ""Case Finding"", y = ""Total Number"", title = ""Finding Report"") +"
-"0","  coord_flip() +"
-"0","  theme_minimal()"
